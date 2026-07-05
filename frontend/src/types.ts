@@ -63,5 +63,5 @@ export interface DecodeResult {
 
 export interface DecodeRequest {
   text: string;
-  jurisdiction?: string; // defaults to "IE"
+  jurisdiction?: string; // auto-detected from document when omitted
 }

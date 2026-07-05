@@ -8,15 +8,12 @@ function delay<T>(value: T, ms = 700): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), ms));
 }
 
-export async function decode(
-  text: string,
-  jurisdiction: string = 'IE'
-): Promise<DecodeResult> {
+export async function decode(text: string): Promise<DecodeResult> {
   if (USE_MOCK) {
-    return delay({ ...sampleResult, jurisdiction });
+    return delay(sampleResult);
   }
 
-  const payload: DecodeRequest = { text, jurisdiction };
+  const payload: DecodeRequest = { text };
 
   const res = await fetch('/api/decode', {
     method: 'POST',

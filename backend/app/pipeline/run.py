@@ -1,4 +1,4 @@
-"""Pipeline entry point — chains classify → identify → extract → retrieve → ground → verify → act."""
+"""Pipeline entry point — chains classify → identify → extract → retrieve → ground → verify → act → refer."""
 
 import logging
 import uuid
@@ -12,9 +12,11 @@ from app.pipeline.institution_resolve import (
     build_institution_prompt,
     institution_from_user_input,
 )
+from app.pipeline.jurisdiction import infer_jurisdiction_from_text
+from app.pipeline.refer_lawyers import refer_lawyers
 from app.pipeline.retrieve import retrieve
 from app.pipeline.verify import verify
-from app.schemas import DecodeResponse, DecodeResult, UserProvidedInstitution
+from app.schemas import DecodeResponse, DecodeResult, LawyerSearchLocation, UserProvidedInstitution
 
 logger = logging.getLogger(__name__)
 
@@ -23,23 +25,27 @@ DISCLAIMER = "Information, not legal advice."
 
 def run_decode(
     text: str,
-    jurisdiction: str = "IE",
+    jurisdiction: str | None = None,
     institution: UserProvidedInstitution | None = None,
+    location: LawyerSearchLocation | None = None,
 ) -> DecodeResponse:
     """Run the decode pipeline with graceful degradation per stage."""
     doc_type = "other"
-    resolved_jurisdiction = jurisdiction or "IE"
+    resolved_jurisdiction = jurisdiction or ""
     bodies = []
     facts = []
     plain_summary = "Document received for analysis."
     claims = []
     verifications = []
     actions = []
+    lawyer_referrals = []
 
     try:
-        doc_type, resolved_jurisdiction = classify(text, resolved_jurisdiction)
+        doc_type, resolved_jurisdiction = classify(text, resolved_jurisdiction or None)
     except Exception:
         logger.exception("classify failed")
+        if not resolved_jurisdiction:
+            resolved_jurisdiction = infer_jurisdiction_from_text(text) or "UNK"
 
     try:
         bodies = identify_bodies(text, doc_type, resolved_jurisdiction)
@@ -87,6 +93,20 @@ def run_decode(
     except Exception:
         logger.exception("act failed")
 
+    try:
+        lawyer_referrals = refer_lawyers(
+            doc_type,
+            resolved_jurisdiction,
+            location,
+            plain_summary,
+            facts,
+            passages=passages,
+            claims=claims,
+            verifications=verifications,
+        )
+    except Exception:
+        logger.exception("refer_lawyers failed")
+
     return DecodeResponse(
         status="complete",
         result=DecodeResult(
@@ -98,6 +118,7 @@ def run_decode(
             claims=claims,
             verification=verifications,
             actions=actions,
+            lawyer_referrals=lawyer_referrals,
             disclaimer=DISCLAIMER,
         ),
     )

@@ -22,7 +22,6 @@ Date of this notice: 21 June 2026`;
 
 export default function PasteBox({ onResult }: PasteBoxProps) {
   const [text, setText] = useState('');
-  const [jurisdiction, setJurisdiction] = useState('IE');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,7 +31,7 @@ export default function PasteBox({ onResult }: PasteBoxProps) {
     setLoading(true);
     setError(null);
     try {
-      const result = await decode(text, jurisdiction);
+      const result = await decode(text);
       onResult(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
@@ -46,21 +45,12 @@ export default function PasteBox({ onResult }: PasteBoxProps) {
       onSubmit={handleSubmit}
       className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 sm:p-7"
     >
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <label
-          htmlFor="doc-text"
-          className="text-sm font-semibold text-stone-700"
-        >
-          Paste your letter, notice, or bill
-        </label>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-500">
-          <span
-            aria-hidden
-            className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500"
-          />
-          Jurisdiction: {jurisdiction}
-        </span>
-      </div>
+      <label
+        htmlFor="doc-text"
+        className="mb-3 block text-sm font-semibold text-stone-700"
+      >
+        Paste your letter, notice, or bill
+      </label>
 
       <textarea
         id="doc-text"
@@ -72,23 +62,13 @@ export default function PasteBox({ onResult }: PasteBoxProps) {
       />
 
       <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
-          <span>Default jurisdiction:</span>
-          <select
-            value={jurisdiction}
-            onChange={(e) => setJurisdiction(e.target.value)}
-            className="rounded-md border border-stone-300 bg-white px-2 py-1 text-xs font-medium text-stone-700"
-          >
-            <option value="IE">Ireland (IE)</option>
-          </select>
-          <button
-            type="button"
-            onClick={() => setText(SAMPLE_TEXT)}
-            className="ml-1 rounded-md border border-stone-200 px-2 py-1 font-medium text-indigo-600 hover:bg-indigo-50"
-          >
-            Try sample notice
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setText(SAMPLE_TEXT)}
+          className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
+        >
+          Try sample notice
+        </button>
 
         <button
           type="submit"
