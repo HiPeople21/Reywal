@@ -21,7 +21,7 @@ from app.db import SessionLocal
 from app.persistence import persist_result
 from app.pipeline.ingest import ingest_document
 from app.pipeline.run import run_decode_stream
-from app.schemas import DecodeResponse, UserProvidedInstitution
+from app.schemas import DecodeResponse, UserProfile, UserProvidedInstitution
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +70,7 @@ def start_job(
     text: str,
     jurisdiction: str | None,
     institution: UserProvidedInstitution | None,
+    profile: UserProfile | None = None,
 ) -> Job:
     """Create a fresh job for job_id (replacing any prior run) and start it."""
     job = Job(id=job_id, raw_text=text)
@@ -79,7 +80,7 @@ def start_job(
 
     thread = threading.Thread(
         target=_run_job,
-        args=(job, jurisdiction, institution),
+        args=(job, jurisdiction, institution, profile),
         name=f"decode-job-{job_id}",
         daemon=True,
     )
@@ -94,6 +95,7 @@ def start_upload_job(
     content_type: str,
     jurisdiction: str | None,
     institution: UserProvidedInstitution | None,
+    profile: UserProfile | None = None,
 ) -> Job:
     """Create a fresh upload job (ingest → decode) for job_id and start it."""
     job = Job(id=job_id, raw_text="")
@@ -103,7 +105,7 @@ def start_upload_job(
 
     thread = threading.Thread(
         target=_run_upload_job,
-        args=(job, data, filename, content_type, jurisdiction, institution),
+        args=(job, data, filename, content_type, jurisdiction, institution, profile),
         name=f"decode-upload-job-{job_id}",
         daemon=True,
     )
@@ -137,9 +139,10 @@ def _run_job(
     job: Job,
     jurisdiction: str | None,
     institution: UserProvidedInstitution | None,
+    profile: UserProfile | None = None,
 ) -> None:
     try:
-        _pump_events(job, run_decode_stream(job.raw_text, jurisdiction, institution))
+        _pump_events(job, run_decode_stream(job.raw_text, jurisdiction, institution, profile))
     except Exception:
         logger.exception("decode job %s failed", job.id)
         job.append(
@@ -161,6 +164,7 @@ def _run_upload_job(
     content_type: str,
     jurisdiction: str | None,
     institution: UserProvidedInstitution | None,
+    profile: UserProfile | None = None,
 ) -> None:
     try:
         job.append(
@@ -188,7 +192,7 @@ def _run_upload_job(
         )
         _pump_events(
             job,
-            run_decode_stream(ingested.full_text_markdown, jurisdiction, institution),
+            run_decode_stream(ingested.full_text_markdown, jurisdiction, institution, profile),
             doc_type_override=ingested.doc_type or None,
         )
     except Exception:

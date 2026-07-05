@@ -70,6 +70,7 @@ export interface DecodeRequest {
   text: string;
   jurisdiction?: string; // auto-detected from document when omitted
   institution?: UserProvidedInstitution | null;
+  profile_id?: string | null; // when set, personal details autofill letter bodies
 }
 
 export interface InstitutionSuggestion {
