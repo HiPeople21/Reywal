@@ -47,6 +47,8 @@ def act(
 
         today = date.today().strftime("%-d %B %Y")  # e.g. "5 July 2026"
 
+        # Only injects sender header details — Qwen writes its own closing/sign-off.
+        # Do NOT append a sign-off here or letters will close twice.
         profile_instruction = (
             (
                 "Use the following personal details to fill in the sender's name, "
@@ -63,7 +65,11 @@ def act(
 
         result = chat_json(
             system=(
-                "Draft actionable next steps for the user. Return JSON: "
+                "Draft actionable next steps FOR THE USER to take against the organisation. "
+                "Every letter or email must be written FROM the user TO the organisation: "
+                "the user is the sender/signatory, the organisation is the recipient. "
+                "Never produce a letter addressed to the user or signed by the organisation. "
+                "Return JSON: "
                 '{"actions": [{"title": str, "kind": "letter|form|email|deadline|contact", '
                 '"body": str, "deadline": str|null}]}. '
                 f"Cite the exact governing rule in letter bodies. {profile_instruction} "
@@ -112,9 +118,12 @@ def _fallback_actions(verifications: list[Verification]) -> list[Action]:
             title="Appeal letter citing governing rule",
             kind="letter",
             body=(
+                "[YOUR NAME]\n[YOUR ADDRESS]\n[DATE]\n\n"
+                "To Whom It May Concern,\n\n"
                 "I am writing to challenge the terms stated in the document I received. "
-                f"Governing rules indicate: {mismatches[0].rule_value}. "
-                "I request that you correct this matter in writing."
+                f"The governing rules indicate: {mismatches[0].rule_value}. "
+                "I request that you correct this matter in writing.\n\n"
+                "Yours sincerely,\n[YOUR NAME]"
             ),
             deadline=None,
         )
