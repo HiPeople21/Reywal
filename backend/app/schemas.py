@@ -79,6 +79,7 @@ class DecodeRequest(BaseModel):
     text: str
     jurisdiction: Optional[str] = None  # auto-detected from document when omitted
     institution: Optional["UserProvidedInstitution"] = None
+    profile_id: Optional[str] = None  # when set, personal details autofill letter bodies
 
 
 class LawyerRecommendRequest(BaseModel):

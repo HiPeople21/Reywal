@@ -15,6 +15,8 @@ from app.models import Document, SourceRow
 from app.persistence import persist_result
 from app.pipeline.ingest import ingest_document
 from app.pipeline.run import run_decode
+from app.crypto import ProfileDecryptionError, decrypt_payload
+from app.models import UserProfileRow
 from app.schemas import (
     Action,
     Claim,
@@ -23,11 +25,46 @@ from app.schemas import (
     DecodeResult,
     ExtractedFact,
     Source,
+    UserProfile,
     UserProvidedInstitution,
     Verification,
 )
 
 router = APIRouter(prefix="/api", tags=["decode"])
+
+
+def _load_profile(profile_id: str | None, db: Session) -> UserProfile | None:
+    """Fetch and decrypt a profile row, returning None on any failure."""
+    if not profile_id:
+        return None
+    row = db.get(UserProfileRow, profile_id)
+    if row is None:
+        return None
+    try:
+        import json
+        payload = decrypt_payload(row.encrypted_payload)
+        extra = payload.get("extra") or {}
+        if isinstance(extra, str):
+            extra = json.loads(extra)
+        return UserProfile(
+            id=row.id,
+            full_name=payload.get("full_name", ""),
+            email=payload.get("email"),
+            phone=payload.get("phone"),
+            address_line1=payload.get("address_line1", ""),
+            address_line2=payload.get("address_line2"),
+            city=payload.get("city", ""),
+            county=payload.get("county", ""),
+            eircode=payload.get("eircode"),
+            date_of_birth=payload.get("date_of_birth"),
+            pps_number=payload.get("pps_number"),
+            jurisdiction=row.jurisdiction,
+            extra=extra,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+    except (ProfileDecryptionError, Exception):
+        return None
 
 
 def _source_to_schema(row: SourceRow | None) -> Source | None:
@@ -67,9 +104,22 @@ def _document_to_result(doc: Document) -> DecodeResult:
     )
 
 
+def _require_document_text(text: str) -> None:
+    """Reject blank submissions before spending a pipeline/LLM call on them.
+
+    Mirrors the ``decode_upload`` "Empty file" guard: a whitespace-only paste
+    should get a clear 400, not a confusing "which body governs this document?"
+    institution prompt run against nothing.
+    """
+    if not text or not text.strip():
+        raise HTTPException(status_code=400, detail="No document text provided")
+
+
 @router.post("/decode", response_model=DecodeResponse)
 def decode(request: DecodeRequest, db: Session = Depends(get_db)) -> DecodeResponse:
-    outcome = run_decode(request.text, request.jurisdiction, request.institution)
+    _require_document_text(request.text)
+    profile = _load_profile(request.profile_id, db)
+    outcome = run_decode(request.text, request.jurisdiction, request.institution, profile)
 
     if outcome.status != "complete" or outcome.result is None:
         return outcome
@@ -149,6 +199,7 @@ async def decode_upload(
     jurisdiction: str = Form("IE"),
     institution_body_id: str | None = Form(None),
     institution_name: str | None = Form(None),
+    profile_id: str | None = Form(None),
     db: Session = Depends(get_db),
 ) -> DecodeResponse:
     """Upload an image or PDF of a document, ingest it to layout-preserving
@@ -172,8 +223,9 @@ async def decode_upload(
         raise HTTPException(status_code=422, detail=f"Could not read document: {exc}")
 
     institution = _institution_from_form(institution_body_id, institution_name)
+    profile = _load_profile(profile_id, db)
 
-    outcome = run_decode(ingested.full_text_markdown, jurisdiction, institution)
+    outcome = run_decode(ingested.full_text_markdown, jurisdiction, institution, profile)
 
     if outcome.status != "complete" or outcome.result is None:
         return outcome
@@ -216,7 +268,9 @@ async def _tail_job(job: Job):
 
 @router.post("/decode/stream")
 def decode_stream(
-    request: DecodeRequest, job_id: str | None = None
+    request: DecodeRequest,
+    job_id: str | None = None,
+    db: Session = Depends(get_db),
 ) -> StreamingResponse:
     """Start a decode job and stream its progress as Server-Sent Events.
 
@@ -225,8 +279,10 @@ def decode_stream(
     via GET /decode/stream/{job_id}. Pass a stable job_id (the client uses its
     session id) to make reconnection possible.
     """
+    _require_document_text(request.text)
     resolved_id = job_id or str(uuid.uuid4())
-    job = start_job(resolved_id, request.text, request.jurisdiction, request.institution)
+    profile = _load_profile(request.profile_id, db)
+    job = start_job(resolved_id, request.text, request.jurisdiction, request.institution, profile)
     return StreamingResponse(
         _tail_job(job), media_type="text/event-stream", headers=_SSE_HEADERS
     )
@@ -238,7 +294,9 @@ async def decode_upload_stream(
     jurisdiction: str = Form("IE"),
     institution_body_id: str | None = Form(None),
     institution_name: str | None = Form(None),
+    profile_id: str | None = Form(None),
     job_id: str | None = None,
+    db: Session = Depends(get_db),
 ) -> StreamingResponse:
     """Upload an image or PDF and stream the decode progress as SSE.
 
@@ -249,6 +307,7 @@ async def decode_upload_stream(
     """
     data = await _read_validated_upload(file)
     institution = _institution_from_form(institution_body_id, institution_name)
+    profile = _load_profile(profile_id, db)
 
     resolved_id = job_id or str(uuid.uuid4())
     job = start_upload_job(
@@ -258,6 +317,7 @@ async def decode_upload_stream(
         (file.content_type or "").lower(),
         jurisdiction,
         institution,
+        profile,
     )
     return StreamingResponse(
         _tail_job(job), media_type="text/event-stream", headers=_SSE_HEADERS
