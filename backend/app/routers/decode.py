@@ -9,12 +9,10 @@ from app.models import (
     ClaimRow,
     Document,
     ExtractedFactRow,
-    LawyerReferralRow,
     SourceRow,
     VerificationRow,
 )
 from app.pipeline.run import run_decode
-from app.routers.lawyers import resolve_search_location
 from app.schemas import (
     Action,
     Claim,
@@ -22,7 +20,6 @@ from app.schemas import (
     DecodeResponse,
     DecodeResult,
     ExtractedFact,
-    LawyerReferral,
     Source,
     Verification,
 )
@@ -98,20 +95,6 @@ def _persist(result: DecodeResult, raw_text: str) -> Document:
             )
         )
 
-    for referral in result.lawyer_referrals:
-        doc.lawyer_referrals.append(
-            LawyerReferralRow(
-                document_id=doc.id,
-                name=referral.name,
-                firm=referral.firm,
-                practice_area=referral.practice_area,
-                location=referral.location,
-                url=referral.url,
-                phone=referral.phone,
-                reason=referral.reason,
-            )
-        )
-
     return doc
 
 
@@ -148,31 +131,13 @@ def _document_to_result(doc: Document) -> DecodeResult:
             Action(title=a.title, kind=a.kind, body=a.body, deadline=a.deadline)
             for a in doc.actions
         ],
-        lawyer_referrals=[
-            LawyerReferral(
-                name=r.name,
-                firm=r.firm,
-                practice_area=r.practice_area,
-                location=r.location,
-                url=r.url,
-                phone=r.phone,
-                reason=r.reason,
-            )
-            for r in doc.lawyer_referrals
-        ],
         disclaimer=doc.disclaimer,
     )
 
 
 @router.post("/decode", response_model=DecodeResponse)
 def decode(request: DecodeRequest, db: Session = Depends(get_db)) -> DecodeResponse:
-    location = resolve_search_location(
-        db,
-        location=request.location,
-        profile_id=request.profile_id,
-        fallback_jurisdiction=request.jurisdiction or "IE",
-    )
-    outcome = run_decode(request.text, request.jurisdiction, request.institution, location)
+    outcome = run_decode(request.text, request.jurisdiction, request.institution)
 
     if outcome.status != "complete" or outcome.result is None:
         return outcome

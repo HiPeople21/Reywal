@@ -63,9 +63,6 @@ class Document(Base):
     actions: Mapped[list["ActionRow"]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
     )
-    lawyer_referrals: Mapped[list["LawyerReferralRow"]] = relationship(
-        back_populates="document", cascade="all, delete-orphan"
-    )
 
 
 class SourceRow(Base):
@@ -140,22 +137,6 @@ class ActionRow(Base):
     deadline: Mapped[str | None] = mapped_column(String, nullable=True)
 
     document: Mapped["Document"] = relationship(back_populates="actions")
-
-
-class LawyerReferralRow(Base):
-    __tablename__ = "lawyer_referrals"
-
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"))
-    name: Mapped[str] = mapped_column(String)
-    firm: Mapped[str] = mapped_column(String)
-    practice_area: Mapped[str] = mapped_column(String)
-    location: Mapped[str] = mapped_column(String)
-    url: Mapped[str | None] = mapped_column(String, nullable=True)
-    phone: Mapped[str | None] = mapped_column(String, nullable=True)
-    reason: Mapped[str] = mapped_column(Text)
-
-    document: Mapped["Document"] = relationship(back_populates="lawyer_referrals")
 
 
 class Institution(Base):

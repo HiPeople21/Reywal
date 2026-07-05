@@ -72,7 +72,6 @@ class DecodeResult(BaseModel):
     claims: list[Claim]
     verification: list[Verification]  # the centerpiece — document vs rule
     actions: list[Action]
-    lawyer_referrals: list[LawyerReferral] = []
     disclaimer: str
 
 
@@ -80,8 +79,6 @@ class DecodeRequest(BaseModel):
     text: str
     jurisdiction: Optional[str] = None  # auto-detected from document when omitted
     institution: Optional["UserProvidedInstitution"] = None
-    profile_id: Optional[str] = None  # use profile city/county for lawyer referrals
-    location: Optional[LawyerSearchLocation] = None
 
 
 class LawyerRecommendRequest(BaseModel):
@@ -125,6 +122,8 @@ class DecodeResponse(BaseModel):
     status: Literal["complete", "needs_institution"]
     institution_prompt: Optional[InstitutionPrompt] = None
     result: Optional[DecodeResult] = None
+    lawyer_referral_eligible: bool = False
+    lawyer_referral_reason: str = ""
 
 
 # --- Profile (autofill) — not part of the frozen DecodeResult contract ---

@@ -13,10 +13,10 @@ from app.pipeline.institution_resolve import (
     institution_from_user_input,
 )
 from app.pipeline.jurisdiction import infer_jurisdiction_from_text
-from app.pipeline.refer_lawyers import refer_lawyers
+from app.pipeline.refer_lawyers import eligibility_reason, needs_lawyer_referral
 from app.pipeline.retrieve import retrieve
 from app.pipeline.verify import verify
-from app.schemas import DecodeResponse, DecodeResult, LawyerSearchLocation, UserProvidedInstitution
+from app.schemas import DecodeResponse, DecodeResult, UserProvidedInstitution
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,6 @@ def run_decode(
     text: str,
     jurisdiction: str | None = None,
     institution: UserProvidedInstitution | None = None,
-    location: LawyerSearchLocation | None = None,
 ) -> DecodeResponse:
     """Run the decode pipeline with graceful degradation per stage."""
     doc_type = "other"
@@ -38,7 +37,6 @@ def run_decode(
     claims = []
     verifications = []
     actions = []
-    lawyer_referrals = []
 
     try:
         doc_type, resolved_jurisdiction = classify(text, resolved_jurisdiction or None)
@@ -93,22 +91,28 @@ def run_decode(
     except Exception:
         logger.exception("act failed")
 
+    lawyer_referral_eligible = False
+    lawyer_referral_reason = ""
     try:
-        lawyer_referrals = refer_lawyers(
-            doc_type,
-            resolved_jurisdiction,
-            location,
-            plain_summary,
-            facts,
+        lawyer_referral_eligible = needs_lawyer_referral(
             passages=passages,
             claims=claims,
             verifications=verifications,
+            facts=facts,
+        )
+        lawyer_referral_reason = eligibility_reason(
+            passages=passages,
+            claims=claims,
+            verifications=verifications,
+            facts=facts,
         )
     except Exception:
-        logger.exception("refer_lawyers failed")
+        logger.exception("lawyer referral eligibility check failed")
 
     return DecodeResponse(
         status="complete",
+        lawyer_referral_eligible=lawyer_referral_eligible,
+        lawyer_referral_reason=lawyer_referral_reason,
         result=DecodeResult(
             id=str(uuid.uuid4()),
             doc_type=doc_type,
@@ -118,7 +122,6 @@ def run_decode(
             claims=claims,
             verification=verifications,
             actions=actions,
-            lawyer_referrals=lawyer_referrals,
             disclaimer=DISCLAIMER,
         ),
     )
