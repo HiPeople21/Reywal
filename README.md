@@ -1,14 +1,14 @@
-# Standing — Bureaucracy Decoder
+# Reywal — Bureaucracy Decoder
 
 Paste an official document — a tenancy termination notice, an insurance denial, a medical
-bill, a government letter — and Standing extracts *your* specific facts, retrieves the
+bill, a government letter — and Reywal extracts *your* specific facts, retrieves the
 *current* governing rule for your jurisdiction, checks whether the document is even lawful,
 cites every claim to a real source passage, and drafts your response. Demo jurisdiction:
 Ireland (RTB, Citizens Information, gov.ie).
 
 ## Why this isn't "just ChatGPT"
 
-A general chatbot can summarize a letter and guess whether it sounds fishy. Standing does
+A general chatbot can summarize a letter and guess whether it sounds fishy. Reywal does
 four things a chat window can't:
 
 1. **Extraction** — pulls out the case-specific facts (notice period, dates, amounts) with
@@ -147,5 +147,5 @@ external client mock-fallback rules). Key paths:
 
 ## Disclaimer
 
-Standing always populates a `disclaimer` field: *"Information, not legal advice."* It asserts
+Reywal always populates a `disclaimer` field: *"Information, not legal advice."* It asserts
 rights by quoting the source it retrieved, not in its own voice.
