@@ -4,12 +4,17 @@ import PasteBox from './components/PasteBox';
 import ResultView from './components/ResultView';
 import Sidebar from './components/Sidebar';
 import ProfilePanel, { PROFILE_ID_KEY } from './components/ProfilePanel';
+import PixelGhost from './components/PixelGhost';
 import { getHealth, getProfile } from './api/client';
 import { useSessions } from './hooks/useSessions';
 import { useDecodeRuns } from './hooks/useDecodeRuns';
 import { useTheme } from './hooks/useTheme';
 
-function App() {
+interface AppProps {
+  onHome?: () => void;
+}
+
+function App({ onHome }: AppProps) {
   const {
     sessions,
     active,
@@ -77,6 +82,7 @@ function App() {
         onCreate={create}
         onDelete={remove}
         onRename={rename}
+        onHome={onHome}
         onOpenProfile={() => setProfileOpen(true)}
         profileName={profile?.full_name ?? null}
         loadingIds={loadingIds}
@@ -84,7 +90,17 @@ function App() {
         onToggleTheme={toggleTheme}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+      <div className="relative isolate flex min-w-0 flex-1 flex-col overflow-y-auto">
+        {/* Big pixel ghost drifting across the blue page background */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
+        >
+          <div className="animate-ghost-drift absolute top-1/2 -translate-y-1/2">
+            <PixelGhost className="animate-ghost-hover h-64 w-auto text-indigo-500/15 sm:h-80" />
+          </div>
+        </div>
+
         {health?.demo_mode && (
           <div className="flex items-center justify-center gap-2 bg-indigo-800 px-4 py-1.5 text-center text-xs font-medium text-indigo-50">
             <span
@@ -97,20 +113,37 @@ function App() {
 
         <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
           <div className="mb-4 flex items-center gap-1.5 text-sm font-medium text-stone-500">
-            <svg
-              className="h-3.5 w-3.5 shrink-0 text-stone-400"
-              viewBox="0 0 20 20"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              aria-hidden
-            >
-              <path
-                d="M5 3h6l4 4v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"
-                strokeLinejoin="round"
-              />
-              <path d="M11 3v4h4" strokeLinejoin="round" />
-            </svg>
+            {isGhost ? (
+              <svg
+                className="h-3.5 w-3.5 shrink-0 text-stone-400"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                aria-hidden
+              >
+                <path
+                  d="M4 16V9a6 6 0 0 1 12 0v7l-2-1.3-2 1.3-2-1.3-2 1.3L4 16Z"
+                  strokeLinejoin="round"
+                />
+                <path d="M8 9h.01M12 9h.01" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg
+                className="h-3.5 w-3.5 shrink-0 text-stone-400"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                aria-hidden
+              >
+                <path
+                  d="M5 3h6l4 4v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"
+                  strokeLinejoin="round"
+                />
+                <path d="M11 3v4h4" strokeLinejoin="round" />
+              </svg>
+            )}
             <span className="truncate">{active?.title || 'New document'}</span>
           </div>
 
