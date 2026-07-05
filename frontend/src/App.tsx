@@ -113,20 +113,37 @@ function App({ onHome }: AppProps) {
 
         <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
           <div className="mb-4 flex items-center gap-1.5 text-sm font-medium text-stone-500">
-            <svg
-              className="h-3.5 w-3.5 shrink-0 text-stone-400"
-              viewBox="0 0 20 20"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              aria-hidden
-            >
-              <path
-                d="M5 3h6l4 4v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"
-                strokeLinejoin="round"
-              />
-              <path d="M11 3v4h4" strokeLinejoin="round" />
-            </svg>
+            {isGhost ? (
+              <svg
+                className="h-3.5 w-3.5 shrink-0 text-stone-400"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                aria-hidden
+              >
+                <path
+                  d="M4 16V9a6 6 0 0 1 12 0v7l-2-1.3-2 1.3-2-1.3-2 1.3L4 16Z"
+                  strokeLinejoin="round"
+                />
+                <path d="M8 9h.01M12 9h.01" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg
+                className="h-3.5 w-3.5 shrink-0 text-stone-400"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                aria-hidden
+              >
+                <path
+                  d="M5 3h6l4 4v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"
+                  strokeLinejoin="round"
+                />
+                <path d="M11 3v4h4" strokeLinejoin="round" />
+              </svg>
+            )}
             <span className="truncate">{active?.title || 'New document'}</span>
           </div>
 

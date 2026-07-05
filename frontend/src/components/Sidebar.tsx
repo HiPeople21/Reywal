@@ -36,6 +36,16 @@ function verdictDot(session: Session): string {
   return 'bg-stone-300';
 }
 
+// Same verdict palette as text color, for the ghost-mode icon.
+function verdictText(session: Session): string {
+  const v = session.result?.verification ?? [];
+  if (v.some((x) => x.verdict === 'mismatch')) return 'text-red-500';
+  if (v.length > 0 && v.every((x) => x.verdict === 'matches'))
+    return 'text-emerald-500';
+  if (session.result) return 'text-amber-400';
+  return 'text-stone-300';
+}
+
 export default function Sidebar({
   sessions,
   activeId,
@@ -220,6 +230,15 @@ export default function Sidebar({
                       title="Decoding…"
                       className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-indigo-300 border-t-indigo-600"
                     />
+                  ) : isGhost ? (
+                    <svg
+                      aria-hidden
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className={`h-3.5 w-3.5 shrink-0 ${verdictText(s)}`}
+                    >
+                      <path d="M4 16V9a6 6 0 0 1 12 0v7l-2-1.3-2 1.3-2-1.3-2 1.3L4 16Z" />
+                    </svg>
                   ) : (
                     <span
                       aria-hidden
