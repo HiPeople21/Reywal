@@ -141,7 +141,7 @@ function App() {
           <footer className="mt-10 border-t border-stone-200 pt-4 pb-2">
             <p className="text-xs leading-relaxed text-stone-400">
               {result?.disclaimer ??
-                'Information, not legal advice. Standing cites the sources it uses so you can verify them yourself.'}
+                'Information, not legal advice. reywal cites the sources it uses so you can verify them yourself.'}
             </p>
           </footer>
         </main>

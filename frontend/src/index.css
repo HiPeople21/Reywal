@@ -85,6 +85,7 @@ html.ghost {
   body {
     margin: 0;
     font-family:
+      'IBM Plex Sans',
       system-ui,
       -apple-system,
       'Segoe UI',
@@ -92,6 +93,14 @@ html.ghost {
       sans-serif;
     background-color: rgb(var(--c-stone-100));
     color: rgb(var(--c-stone-900));
+  }
+
+  .font-display {
+    font-family: 'Fraunces', Georgia, serif;
+  }
+
+  .font-brand {
+    font-family: 'Montserrat', 'IBM Plex Sans', system-ui, sans-serif;
   }
 }
 
@@ -150,6 +159,15 @@ html.ghost {
   .receipt-quote {
     font-family: ui-monospace, Consolas, 'Courier New', monospace;
   }
+
+  .animate-fade-up {
+    animation: fadeUp 0.7s ease-out both;
+  }
+
+  .animate-fade-up-delay {
+    animation: fadeUp 0.7s ease-out 0.15s both;
+  }
+
 }
 
 /* --- Ghost spinner + thinking line + drop-zone animations --- */
@@ -195,6 +213,16 @@ html.ghost {
   from {
     opacity: 0;
     transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
   }
   to {
     opacity: 1;

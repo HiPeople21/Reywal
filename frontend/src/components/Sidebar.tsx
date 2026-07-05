@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Session } from '../types';
+import Logo from './Logo';
 
 interface SidebarProps {
   sessions: Session[];
@@ -92,16 +93,8 @@ export default function Sidebar({
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-stone-200 bg-surface">
       {/* Brand */}
-      <div className="flex items-center gap-2 px-4 py-4">
-        <span
-          aria-hidden
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-black text-white"
-        >
-          S
-        </span>
-        <span className="text-lg font-black tracking-tight text-stone-900">
-          Standing
-        </span>
+      <div className="px-4 py-4">
+        <Logo size="sm" />
       </div>
 
       {/* New document */}
