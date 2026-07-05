@@ -41,11 +41,7 @@ within 14 days of this notice.
 
 Date of this notice: 21 June 2026`;
 
-const JURISDICTIONS = [
-  { value: '', label: 'Auto-detect' },
-  { value: 'IE', label: 'Ireland (IE)' },
-  { value: 'GB', label: 'United Kingdom (GB)' },
-];
+import { JURISDICTIONS } from '../data/jurisdictions';
 
 export default function PasteBox({
   text,
