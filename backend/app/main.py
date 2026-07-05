@@ -1,10 +1,13 @@
 """FastAPI app entry point: CORS, router wiring, startup table creation, health."""
 
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -71,3 +74,35 @@ def health() -> dict:
         "tls_enabled": tls_enabled,
         "profile_encryption": bool(os.getenv("PROFILE_ENCRYPTION_KEY")),
     }
+
+
+# --- Static frontend ---------------------------------------------------------
+# In production the compiled Vite bundle is served by this same app, so the
+# frontend's relative `/api/...` calls hit the same origin (no proxy, no CORS).
+# The dist directory is optional: when it's absent (e.g. local `./dev.sh`, where
+# Vite serves the frontend on :5173 and proxies /api here) these routes simply
+# aren't registered. Registered last so the /api routes above always win.
+_BACKEND_DIR = Path(__file__).resolve().parent.parent
+_dist_candidates = []
+if os.getenv("FRONTEND_DIST"):
+    _dist_candidates.append(Path(os.environ["FRONTEND_DIST"]))
+_dist_candidates += [
+    _BACKEND_DIR / "static",  # baked into the Docker image
+    _BACKEND_DIR.parent / "frontend" / "dist",  # local `npm run build`
+]
+_FRONTEND_DIST = next(
+    (p for p in _dist_candidates if (p / "index.html").is_file()), None
+)
+
+if _FRONTEND_DIST is not None:
+    _assets_dir = _FRONTEND_DIST / "assets"
+    if _assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=_assets_dir), name="assets")
+
+    @app.get("/{full_path:path}")
+    def spa(full_path: str) -> FileResponse:
+        """Serve a static file when it exists, else fall back to index.html."""
+        candidate = _FRONTEND_DIST / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(_FRONTEND_DIST / "index.html")
