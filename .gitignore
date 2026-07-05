@@ -219,3 +219,5 @@ __marimo__/
 
 
 backend/standing.db
+*.DS_Store
+.vscode

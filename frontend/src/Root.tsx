@@ -20,5 +20,5 @@ export default function Root() {
     return <LandingPage onGetStarted={() => setStarted(true)} />;
   }
 
-  return <App onGoHome={() => setStarted(false)} />;
+  return <App onHome={() => setStarted(false)} />;
 }

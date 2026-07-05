@@ -16,8 +16,10 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.clients.config import is_demo_mode
 from app.db import SessionLocal
 from app.persistence import persist_result
+from app.pipeline.ingest import ingest_document
 from app.pipeline.run import run_decode_stream
 from app.schemas import DecodeResponse, UserProvidedInstitution
 
@@ -85,28 +87,112 @@ def start_job(
     return job
 
 
+def start_upload_job(
+    job_id: str,
+    data: bytes,
+    filename: str,
+    content_type: str,
+    jurisdiction: str | None,
+    institution: UserProvidedInstitution | None,
+) -> Job:
+    """Create a fresh upload job (ingest → decode) for job_id and start it."""
+    job = Job(id=job_id, raw_text="")
+    with _REGISTRY_LOCK:
+        _purge_expired()
+        _REGISTRY[job_id] = job
+
+    thread = threading.Thread(
+        target=_run_upload_job,
+        args=(job, data, filename, content_type, jurisdiction, institution),
+        name=f"decode-upload-job-{job_id}",
+        daemon=True,
+    )
+    thread.start()
+    return job
+
+
+def _pump_events(job: Job, events, doc_type_override: str | None = None) -> None:
+    """Append pipeline events to the job, persisting the terminal result."""
+    for event in events:
+        response: DecodeResponse | None = event.get("response")
+        if response is not None:
+            if response.status == "complete" and response.result is not None:
+                if doc_type_override:
+                    # The vision ingest actually saw the document — trust its
+                    # classification (mirrors POST /decode/upload).
+                    response.result.doc_type = doc_type_override
+                _persist_completed(response, job.raw_text)
+            job.append(
+                {
+                    "stage": event["stage"],
+                    "status": event["status"],
+                    "response": response.model_dump(),
+                }
+            )
+        else:
+            job.append(event)
+
+
 def _run_job(
     job: Job,
     jurisdiction: str | None,
     institution: UserProvidedInstitution | None,
 ) -> None:
     try:
-        for event in run_decode_stream(job.raw_text, jurisdiction, institution):
-            response: DecodeResponse | None = event.get("response")
-            if response is not None:
-                if response.status == "complete" and response.result is not None:
-                    _persist_completed(response, job.raw_text)
-                job.append(
-                    {
-                        "stage": event["stage"],
-                        "status": event["status"],
-                        "response": response.model_dump(),
-                    }
-                )
-            else:
-                job.append(event)
+        _pump_events(job, run_decode_stream(job.raw_text, jurisdiction, institution))
     except Exception:
         logger.exception("decode job %s failed", job.id)
+        job.append(
+            {
+                "stage": "error",
+                "status": "done",
+                "detail": "The decode failed on the server. Please try again.",
+            }
+        )
+    finally:
+        with job.lock:
+            job.done = True
+
+
+def _run_upload_job(
+    job: Job,
+    data: bytes,
+    filename: str,
+    content_type: str,
+    jurisdiction: str | None,
+    institution: UserProvidedInstitution | None,
+) -> None:
+    try:
+        job.append(
+            {"stage": "ingest", "status": "running", "label": "Reading your file…"}
+        )
+        try:
+            # DEMO_MODE uses the canned ingest fixture so upload works offline
+            # without a Tesseract binary; live mode does real OCR/vision.
+            ingested = ingest_document(
+                data, filename, content_type, demo=is_demo_mode()
+            )
+        except Exception as exc:  # noqa: BLE001 — surface a clean error frame
+            logger.exception("upload job %s ingest failed", job.id)
+            job.append(
+                {
+                    "stage": "error",
+                    "status": "done",
+                    "detail": f"Could not read document: {exc}",
+                }
+            )
+            return
+        job.raw_text = ingested.full_text_markdown
+        job.append(
+            {"stage": "ingest", "status": "done", "detail": "Converted your file to text"}
+        )
+        _pump_events(
+            job,
+            run_decode_stream(ingested.full_text_markdown, jurisdiction, institution),
+            doc_type_override=ingested.doc_type or None,
+        )
+    except Exception:
+        logger.exception("decode upload job %s failed", job.id)
         job.append(
             {
                 "stage": "error",

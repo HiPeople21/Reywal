@@ -8,8 +8,9 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from app.clients.config import is_demo_mode
 from app.db import get_db
-from app.jobs import Job, get_job, start_job
+from app.jobs import Job, get_job, start_job, start_upload_job
 from app.models import Document, SourceRow
 from app.persistence import persist_result
 from app.pipeline.ingest import ingest_document
@@ -109,22 +110,8 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
 _ALLOWED_EXTS = (".pdf", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".tif", ".tiff", ".bmp")
 
 
-@router.post("/decode/upload", response_model=DecodeResponse)
-async def decode_upload(
-    file: UploadFile = File(...),
-    jurisdiction: str = Form("IE"),
-    institution_body_id: str | None = Form(None),
-    institution_name: str | None = Form(None),
-    db: Session = Depends(get_db),
-) -> DecodeResponse:
-    """Upload an image or PDF of a document, ingest it to layout-preserving
-    markdown, then run the pipeline. Sibling of the JSON POST /api/decode.
-
-    Returns a DecodeResponse so the upload flow mirrors the paste flow: when no
-    governing body can be identified the response is ``needs_institution`` with a
-    prompt, and the client can re-upload with ``institution_body_id`` /
-    ``institution_name`` set to complete the decode.
-    """
+async def _read_validated_upload(file: UploadFile) -> bytes:
+    """Read an uploaded file, enforcing the size and type limits."""
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
@@ -142,18 +129,49 @@ async def decode_upload(
         raise HTTPException(
             status_code=415, detail=f"Unsupported file type: {ctype or fname or 'unknown'}"
         )
+    return data
 
-    try:
-        ingested = ingest_document(data, fname, ctype)
-    except Exception as exc:  # noqa: BLE001 — surface a clean 422, not a 500
-        raise HTTPException(status_code=422, detail=f"Could not read document: {exc}")
 
-    institution: UserProvidedInstitution | None = None
+def _institution_from_form(
+    institution_body_id: str | None, institution_name: str | None
+) -> UserProvidedInstitution | None:
     if institution_body_id or institution_name:
-        institution = UserProvidedInstitution(
+        return UserProvidedInstitution(
             body_id=institution_body_id or None,
             display_name=institution_name or None,
         )
+    return None
+
+
+@router.post("/decode/upload", response_model=DecodeResponse)
+async def decode_upload(
+    file: UploadFile = File(...),
+    jurisdiction: str = Form("IE"),
+    institution_body_id: str | None = Form(None),
+    institution_name: str | None = Form(None),
+    db: Session = Depends(get_db),
+) -> DecodeResponse:
+    """Upload an image or PDF of a document, ingest it to layout-preserving
+    markdown, then run the pipeline. Sibling of the JSON POST /api/decode.
+
+    Returns a DecodeResponse so the upload flow mirrors the paste flow: when no
+    governing body can be identified the response is ``needs_institution`` with a
+    prompt, and the client can re-upload with ``institution_body_id`` /
+    ``institution_name`` set to complete the decode.
+    """
+    data = await _read_validated_upload(file)
+
+    try:
+        ingested = ingest_document(
+            data,
+            file.filename or "",
+            (file.content_type or "").lower(),
+            demo=is_demo_mode(),
+        )
+    except Exception as exc:  # noqa: BLE001 — surface a clean 422, not a 500
+        raise HTTPException(status_code=422, detail=f"Could not read document: {exc}")
+
+    institution = _institution_from_form(institution_body_id, institution_name)
 
     outcome = run_decode(ingested.full_text_markdown, jurisdiction, institution)
 
@@ -209,6 +227,38 @@ def decode_stream(
     """
     resolved_id = job_id or str(uuid.uuid4())
     job = start_job(resolved_id, request.text, request.jurisdiction, request.institution)
+    return StreamingResponse(
+        _tail_job(job), media_type="text/event-stream", headers=_SSE_HEADERS
+    )
+
+
+@router.post("/decode/upload/stream")
+async def decode_upload_stream(
+    file: UploadFile = File(...),
+    jurisdiction: str = Form("IE"),
+    institution_body_id: str | None = Form(None),
+    institution_name: str | None = Form(None),
+    job_id: str | None = None,
+) -> StreamingResponse:
+    """Upload an image or PDF and stream the decode progress as SSE.
+
+    Streaming sibling of POST /decode/upload, mirroring POST /decode/stream:
+    the file is read up front (the UploadFile dies with this request), then the
+    ingest + pipeline run as a background job keyed by job_id so the client can
+    reconnect via GET /decode/stream/{job_id} after a refresh.
+    """
+    data = await _read_validated_upload(file)
+    institution = _institution_from_form(institution_body_id, institution_name)
+
+    resolved_id = job_id or str(uuid.uuid4())
+    job = start_upload_job(
+        resolved_id,
+        data,
+        file.filename or "",
+        (file.content_type or "").lower(),
+        jurisdiction,
+        institution,
+    )
     return StreamingResponse(
         _tail_job(job), media_type="text/event-stream", headers=_SSE_HEADERS
     )
