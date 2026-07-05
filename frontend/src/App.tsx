@@ -20,11 +20,12 @@ function App() {
     rename,
     setText,
     setJurisdiction,
+    setTitle,
     setResult,
     setDecoding,
   } = useSessions();
 
-  const { getRun, startDecode, resumeDecode, loadingIds } = useDecodeRuns(
+  const { getRun, startDecode, uploadDecode, resumeDecode, loadingIds } = useDecodeRuns(
     setResult,
     setDecoding
   );
@@ -129,6 +130,15 @@ function App() {
                   institution
                 )
               }
+              onUpload={(file, institution) => {
+                setTitle(active.id, file.name);
+                void uploadDecode(
+                  active.id,
+                  file,
+                  active.jurisdiction || undefined,
+                  institution
+                );
+              }}
             />
           )}
 
