@@ -22,6 +22,7 @@ from app.schemas import (
     DecodeResult,
     ExtractedFact,
     Source,
+    UserProvidedInstitution,
     Verification,
 )
 
@@ -179,14 +180,22 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
 _ALLOWED_EXTS = (".pdf", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".tif", ".tiff", ".bmp")
 
 
-@router.post("/decode/upload", response_model=DecodeResult)
+@router.post("/decode/upload", response_model=DecodeResponse)
 async def decode_upload(
     file: UploadFile = File(...),
     jurisdiction: str = Form("IE"),
+    institution_body_id: str | None = Form(None),
+    institution_name: str | None = Form(None),
     db: Session = Depends(get_db),
-) -> DecodeResult:
+) -> DecodeResponse:
     """Upload an image or PDF of a document, ingest it to layout-preserving
-    markdown, then run the pipeline. Sibling of the JSON POST /api/decode."""
+    markdown, then run the pipeline. Sibling of the JSON POST /api/decode.
+
+    Returns a DecodeResponse so the upload flow mirrors the paste flow: when no
+    governing body can be identified the response is ``needs_institution`` with a
+    prompt, and the client can re-upload with ``institution_body_id`` /
+    ``institution_name`` set to complete the decode.
+    """
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
@@ -210,19 +219,27 @@ async def decode_upload(
     except Exception as exc:  # noqa: BLE001 — surface a clean 422, not a 500
         raise HTTPException(status_code=422, detail=f"Could not read document: {exc}")
 
-    outcome = run_decode(ingested.full_text_markdown, jurisdiction)
-    if outcome.result is None:
-        raise HTTPException(status_code=422, detail="Could not decode the uploaded document")
-    result = outcome.result
-    # The vision ingest actually saw the document — trust its classification.
-    result.doc_type = ingested.doc_type or result.doc_type
+    institution: UserProvidedInstitution | None = None
+    if institution_body_id or institution_name:
+        institution = UserProvidedInstitution(
+            body_id=institution_body_id or None,
+            display_name=institution_name or None,
+        )
 
-    doc = _persist(result, ingested.full_text_markdown)
+    outcome = run_decode(ingested.full_text_markdown, jurisdiction, institution)
+
+    if outcome.status != "complete" or outcome.result is None:
+        return outcome
+
+    # The vision ingest actually saw the document — trust its classification.
+    outcome.result.doc_type = ingested.doc_type or outcome.result.doc_type
+
+    doc = _persist(outcome.result, ingested.full_text_markdown)
     db.add(doc)
     db.commit()
     db.refresh(doc)
 
-    return result
+    return outcome
 
 
 @router.get("/documents", response_model=list[DecodeResult])

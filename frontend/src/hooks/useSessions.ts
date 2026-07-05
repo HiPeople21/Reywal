@@ -94,6 +94,11 @@ export function useSessions() {
     [patch]
   );
 
+  const setTitle = useCallback(
+    (id: string, title: string) => patch(id, { title }),
+    [patch]
+  );
+
   const setResult = useCallback(
     (id: string, result: DecodeResult) => patch(id, { result }),
     [patch]
@@ -122,6 +127,7 @@ export function useSessions() {
     remove,
     setText,
     setJurisdiction,
+    setTitle,
     setResult,
   };
 }

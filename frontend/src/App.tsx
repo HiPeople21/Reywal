@@ -18,6 +18,7 @@ function App() {
     remove,
     setText,
     setJurisdiction,
+    setTitle,
     setResult,
   } = useSessions();
 
@@ -94,6 +95,7 @@ function App() {
               onTextChange={(t) => setText(active.id, t)}
               onJurisdictionChange={(j) => setJurisdiction(active.id, j)}
               onResult={(r) => setResult(active.id, r)}
+              onUploaded={(name) => setTitle(active.id, name)}
             />
           )}
 

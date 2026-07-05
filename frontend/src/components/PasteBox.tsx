@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import type { FormEvent } from 'react';
+import { useRef, useState } from 'react';
+import type { DragEvent, FormEvent } from 'react';
 import type {
+  DecodeResponse,
   DecodeResult,
   InstitutionPrompt,
   UserProvidedInstitution,
 } from '../types';
-import { decode } from '../api/client';
+import { decode, uploadDocument } from '../api/client';
 
 interface PasteBoxProps {
   text: string;
@@ -13,6 +14,15 @@ interface PasteBoxProps {
   onTextChange: (text: string) => void;
   onJurisdictionChange: (jurisdiction: string) => void;
   onResult: (result: DecodeResult) => void;
+  onUploaded?: (filename: string) => void;
+}
+
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20 MB — mirrors the backend limit.
+
+function isPdf(file: File): boolean {
+  return (
+    file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+  );
 }
 
 const SAMPLE_TEXT = `NOTICE OF TERMINATION
@@ -40,11 +50,91 @@ export default function PasteBox({
   onTextChange,
   onJurisdictionChange,
   onResult,
+  onUploaded,
 }: PasteBoxProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState<InstitutionPrompt | null>(null);
   const [institutionText, setInstitutionText] = useState('');
+  const [dragging, setDragging] = useState(false);
+  // The last uploaded file, kept so the institution prompt can re-run the
+  // upload (with the chosen institution) instead of the text-paste path.
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Shared handling for both the paste and upload responses. ``file`` is the
+  // source upload when this response came from an upload (null for paste), so a
+  // follow-up institution prompt knows which path to re-run.
+  function handleResponse(response: DecodeResponse, file: File | null) {
+    if (response.status === 'needs_institution') {
+      setPendingFile(file);
+      setPrompt(response.institution_prompt);
+      return;
+    }
+    if (response.result) {
+      setPrompt(null);
+      setPendingFile(null);
+      setInstitutionText('');
+      onResult(response.result);
+      if (file) onUploaded?.(file.name);
+      return;
+    }
+    // Reached only if the server returns a shape we don't understand
+    // (e.g. a stale backend on the old contract). Fail loudly rather than
+    // leaving the user staring at a spinner that silently resolved.
+    setError(
+      'The server returned an unexpected response. It may be running an ' +
+        'older version — try restarting the backend and decoding again.'
+    );
+  }
+
+  async function submitFile(
+    file: File,
+    institution?: UserProvidedInstitution | null
+  ) {
+    if (loading) return;
+    // Only validate on the first attempt; a resubmit reuses an accepted file.
+    if (!institution) {
+      if (!isPdf(file)) {
+        setError('Please upload a PDF file.');
+        return;
+      }
+      if (file.size > MAX_UPLOAD_BYTES) {
+        setError('That file is too large (max 20 MB).');
+        return;
+      }
+      setPrompt(null);
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await uploadDocument(
+        file,
+        jurisdiction || undefined,
+        institution
+      );
+      handleResponse(response, file);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not read that PDF.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleFileInput(files: FileList | null) {
+    const file = files?.[0];
+    if (file) void submitFile(file);
+    // Reset so selecting the same file again still fires onChange.
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  function handleDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragging(false);
+    if (loading) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) void submitFile(file);
+  }
 
   async function submit(institution?: UserProvidedInstitution | null) {
     if (!text.trim() || loading) return;
@@ -52,23 +142,7 @@ export default function PasteBox({
     setError(null);
     try {
       const response = await decode(text, jurisdiction || undefined, institution);
-      if (response.status === 'needs_institution') {
-        setPrompt(response.institution_prompt);
-        return;
-      }
-      if (response.result) {
-        setPrompt(null);
-        setInstitutionText('');
-        onResult(response.result);
-        return;
-      }
-      // Reached only if the server returns a shape we don't understand
-      // (e.g. a stale backend on the old contract). Fail loudly rather than
-      // leaving the user staring at a spinner that silently resolved.
-      setError(
-        'The server returned an unexpected response. It may be running an ' +
-          'older version — try restarting the backend and decoding again.'
-      );
+      handleResponse(response, null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
@@ -76,9 +150,16 @@ export default function PasteBox({
     }
   }
 
+  // Route the institution prompt's answer back to whichever path raised it.
+  function continueWithInstitution(institution: UserProvidedInstitution) {
+    if (pendingFile) void submitFile(pendingFile, institution);
+    else void submit(institution);
+  }
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setPrompt(null);
+    setPendingFile(null);
     void submit();
   }
 
@@ -105,14 +186,32 @@ export default function PasteBox({
         )}
       </div>
 
-      <textarea
-        id="doc-text"
-        value={text}
-        onChange={(e) => onTextChange(e.target.value)}
-        placeholder="Paste the full text of the tenancy notice, insurance letter, medical bill, or government letter here..."
-        rows={12}
-        className="w-full resize-y rounded-xl border border-stone-300 bg-stone-50 p-4 text-sm leading-relaxed text-stone-800 shadow-inner focus:border-indigo-400 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-indigo-100"
-      />
+      <div
+        className="relative"
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!loading) setDragging(true);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          setDragging(false);
+        }}
+        onDrop={handleDrop}
+      >
+        <textarea
+          id="doc-text"
+          value={text}
+          onChange={(e) => onTextChange(e.target.value)}
+          placeholder="Paste the full text of the tenancy notice, insurance letter, medical bill, or government letter here — or drop a PDF."
+          rows={12}
+          className="w-full resize-y rounded-xl border border-stone-300 bg-stone-50 p-4 text-sm leading-relaxed text-stone-800 shadow-inner focus:border-indigo-400 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-indigo-100"
+        />
+        {dragging && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl border-2 border-dashed border-indigo-400 bg-indigo-50/90 text-sm font-semibold text-indigo-700">
+            Drop your PDF to decode it
+          </div>
+        )}
+      </div>
 
       <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
@@ -134,6 +233,21 @@ export default function PasteBox({
             className="ml-1 rounded-md border border-stone-200 px-2 py-1 font-medium text-indigo-600 hover:bg-indigo-50"
           >
             Try sample notice
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            className="hidden"
+            onChange={(e) => handleFileInput(e.target.files)}
+          />
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => fileInputRef.current?.click()}
+            className="rounded-md border border-stone-200 px-2 py-1 font-medium text-indigo-600 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Upload PDF
           </button>
         </div>
 
@@ -164,7 +278,7 @@ export default function PasteBox({
                   key={s.body_id}
                   type="button"
                   disabled={loading}
-                  onClick={() => void submit({ body_id: s.body_id })}
+                  onClick={() => continueWithInstitution({ body_id: s.body_id })}
                   className="rounded-lg border border-amber-300 bg-surface px-3 py-1.5 text-sm font-medium text-amber-900 transition hover:bg-amber-100 disabled:opacity-50"
                 >
                   {s.display_name}
@@ -184,7 +298,7 @@ export default function PasteBox({
               type="button"
               disabled={loading || institutionText.trim() === ''}
               onClick={() =>
-                void submit({ display_name: institutionText.trim() })
+                continueWithInstitution({ display_name: institutionText.trim() })
               }
               className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-stone-300"
             >
