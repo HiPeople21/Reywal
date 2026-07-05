@@ -7,6 +7,7 @@ import type {
   UserProvidedInstitution,
 } from '../types';
 import { decodeStream, resumeDecodeStream, uploadDocumentStream } from '../api/client';
+import { PROFILE_ID_KEY } from '../components/ProfilePanel';
 
 // Per-session decode state. Lives at the App level (not inside PasteBox) so that
 // switching sessions — e.g. clicking "New document" mid-decode — never unmounts
@@ -92,12 +93,14 @@ export function useDecodeRuns(
       }));
       onDecodingChange(sessionId, true);
       try {
+        const profileId = localStorage.getItem(PROFILE_ID_KEY);
         const response = await decodeStream(
           sessionId,
           text,
           (event) => pushEvent(sessionId, event),
           jurisdiction,
-          institution
+          institution,
+          profileId
         );
         applyResponse(sessionId, response);
       } catch (err) {
@@ -127,12 +130,14 @@ export function useDecodeRuns(
       }));
       onDecodingChange(sessionId, true);
       try {
+        const profileId = localStorage.getItem(PROFILE_ID_KEY);
         const response = await uploadDocumentStream(
           sessionId,
           file,
           (event) => pushEvent(sessionId, event),
           jurisdiction,
-          institution
+          institution,
+          profileId
         );
         applyResponse(sessionId, response);
       } catch (err) {
