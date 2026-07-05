@@ -61,15 +61,15 @@ export interface DecodeResult {
   disclaimer: string;
 }
 
+export interface UserProvidedInstitution {
+  body_id?: string | null; // registry slug, e.g. "rtb" or "IE:rtb"
+  display_name?: string | null; // free text when slug is unknown
+}
+
 export interface DecodeRequest {
   text: string;
   jurisdiction?: string; // auto-detected from document when omitted
-  institution?: UserProvidedInstitution;
-}
-
-export interface UserProvidedInstitution {
-  body_id?: string | null;
-  display_name?: string | null;
+  institution?: UserProvidedInstitution | null;
 }
 
 export interface InstitutionSuggestion {
@@ -79,14 +79,15 @@ export interface InstitutionSuggestion {
 
 export interface InstitutionPrompt {
   message: string;
-  field?: string;
-  suggestions?: InstitutionSuggestion[];
+  field: string; // defaults to "institution"
+  suggestions: InstitutionSuggestion[];
 }
 
+// POST /api/decode returns this wrapper, not a bare DecodeResult.
 export interface DecodeResponse {
   status: 'complete' | 'needs_institution';
-  institution_prompt?: InstitutionPrompt | null;
-  result?: DecodeResult | null;
+  institution_prompt: InstitutionPrompt | null;
+  result: DecodeResult | null;
   lawyer_referral_eligible?: boolean;
   lawyer_referral_reason?: string;
 }
@@ -124,6 +125,14 @@ export interface LawyerRecommendResponse {
   referrals: LawyerReferral[];
   eligible: boolean;
   reason: string;
+}
+
+// GET /api/health
+export interface HealthStatus {
+  status: string;
+  demo_mode: boolean;
+  tls_enabled: boolean;
+  profile_encryption: boolean;
 }
 
 // --- Profile (autofill) — mirrors UserProfile in schemas.py ---

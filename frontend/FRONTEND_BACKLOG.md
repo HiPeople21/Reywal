@@ -1,6 +1,6 @@
 # Frontend backlog — backend features audit
 
-Last updated: 2026-07-05 (post-merge: sidebar + profile + lawyer referral backend)
+Last updated: 2026-07-05 (post-merge: institution prompt + health banner + lawyer backend)
 
 This document tracks backend capabilities vs frontend implementation. See `CLAUDE.md` for the API contract.
 
@@ -19,54 +19,45 @@ This document tracks backend capabilities vs frontend implementation. See `CLAUD
 
 | Area | Backend | Frontend | Gap |
 |------|---------|----------|-----|
-| Core decode (`POST /api/decode`) | ✅ | 🔶 | Unwraps `complete` only; ignores lawyer eligibility flags |
+| Core decode (`POST /api/decode`) | ✅ | ✅ | Full `DecodeResponse` flow |
+| `needs_institution` prompt flow | ✅ | ✅ | Suggestions + free-text re-submit |
 | Result display (summary, facts, verification, claims, actions) | ✅ | ✅ | — |
 | Cursor-style sidebar + client sessions | — | ✅ | localStorage via `useSessions` |
-| User profile CRUD | ✅ | ✅ | `ProfilePanel` + `api/client.ts` |
-| Institution prompt (`needs_institution`) | ✅ | ❌ | Popup + re-submit with `institution` |
+| User profile CRUD | ✅ | ✅ | Modal: create/edit/delete, PPS masked |
+| Health / demo-mode indicator | ✅ | ✅ | Banner when `demo_mode` |
+| Jurisdiction selector (auto + IE + GB) | ✅ | ✅ | Auto-detect default |
 | Lawyer referrals (`POST /api/lawyers/recommend`) | ✅ | ❌ | Location popup + referral cards |
+| Lawyer eligibility flags on decode | ✅ | ❌ | `lawyer_referral_eligible` not surfaced |
 | Jurisdiction mismatch flag | 🔧 | ❌ | Backend detects; no mismatch field yet |
-| Jurisdiction auto-detect + optional hint | ✅ | 🔶 | Auto-detect default; GB added; mismatch UI missing |
-| Server document history (`GET /api/documents`) | ✅ | ❌ | Sessions are client-only |
-| Health / demo-mode indicator | ✅ | ❌ | Optional banner |
+| Server document history (`GET /api/documents`) | ✅ | 🔶 | Client fns added; sidebar uses localStorage |
 | Profile autofill in generated letters | 🔧 | ❌ | `profile_id` not on `DecodeRequest` |
+| Identified institutions in results | 🔧 | ❌ | Not exposed in API schema |
+| TLS / HTTPS dev setup | ✅ | 🔶 | Vite proxy is HTTP-only |
 
 ---
 
 ## ✅ Already implemented
 
 - **Sidebar + multi-session** — `Sidebar`, `useSessions` (localStorage), forest palette
-- **Paste & decode** — `PasteBox` → `POST /api/decode` (happy path)
+- **Paste & decode** — `PasteBox` → `POST /api/decode` via full `DecodeResponse`
+- **Institution prompt** — inline panel with suggestions + free-text re-submit
 - **Jurisdiction selector** — Auto-detect (default), IE, GB
 - **Mock mode** — `VITE_MOCK=1` serves `mocks/sampleResult.ts`
 - **Result display** — `ResultView`, `VerificationPanel`, `ClaimCard`, `ActionCard`
-- **Profile CRUD** — `ProfilePanel`, types in `types.ts`, API in `client.ts`
+- **Profile CRUD** — `ProfilePanel`, types in `types.ts`, API in `client.ts`, delete
+- **Health banner** — demo-mode indicator in `App.tsx`
 - **Disclaimer** — footer in `App.tsx`
+- **History API client** — `listDocuments()`, `getDocument(id)` (not wired to sidebar)
 
 ---
 
 ## ❌ Backend ready — frontend needed
 
-### 1. Institution identification popup (high priority)
-
-**Backend:** `POST /api/decode` returns `DecodeResponse` with `status: "needs_institution"` and `institution_prompt` (message + suggestions).
-
-**Current behaviour:** `decode()` throws a generic error. No UI to pick RTB / Citizens Information / etc.
-
-**Tasks**
-
-- [ ] Change `decode()` to return full `DecodeResponse` (or add `decodeDocument()` alongside)
-- [ ] Modal/popup showing `institution_prompt.message` and suggestion buttons
-- [ ] Re-submit with `institution: { body_id, display_name }` on selection
-- [ ] Handle free-text institution when slug unknown
-
----
-
-### 2. Lawyer referral flow (high priority)
+### 1. Lawyer referral flow (high priority)
 
 **Backend:** Pipeline sets `lawyer_referral_eligible` + `lawyer_referral_reason` on complete decodes. Actual referrals via `POST /api/lawyers/recommend` with decode context + user location.
 
-**Current behaviour:** Eligibility flags are discarded when `decode()` unwraps `result` only.
+**Current behaviour:** `PasteBox` ignores eligibility flags after a successful decode.
 
 **Tasks**
 
@@ -78,58 +69,42 @@ This document tracks backend capabilities vs frontend implementation. See `CLAUD
 
 ---
 
-### 3. Jurisdiction mismatch warning (medium priority)
+### 2. Jurisdiction mismatch warning (medium priority)
 
 **Product intent:** User may set a jurisdiction hint. Backend classifies document jurisdiction independently. UI should flag when they differ.
 
-**Backend gap:** No `jurisdiction_hint` vs `detected_jurisdiction` fields on `DecodeResult` yet — classify overwrites to detected value.
+**Backend gap:** No `jurisdiction_hint` vs `detected_jurisdiction` fields on `DecodeResult` yet.
 
 **Tasks**
 
-- [ ] Backend: add `jurisdiction_mismatch: bool` and/or `user_jurisdiction_hint` to `DecodeResponse` or `DecodeResult`
-- [ ] Frontend: warning banner when hint ≠ detected (e.g. user picked IE, document is GB)
+- [ ] Backend: add mismatch fields to `DecodeResponse` or `DecodeResult`
+- [ ] Frontend: warning banner when hint ≠ detected
 - [ ] When auto-detect returns `UNK`, prompt user to select jurisdiction and re-decode
 
 ---
 
-### 4. Server document history (medium priority)
+### 3. Server document history sync (medium priority)
 
 **Backend:** `GET /api/documents`, `GET /api/documents/{id}` — SQLite persistence on every decode.
 
-**Current behaviour:** Sidebar sessions are localStorage only; server history unused.
+**Current behaviour:** Sidebar sessions are localStorage only; `listDocuments()` / `getDocument()` exist but are unused.
 
 **Tasks**
 
-- [ ] Add `listDocuments()` / `getDocument(id)` to `api/client.ts`
-- [ ] Option A: replace localStorage sessions with server list
-- [ ] Option B: sync completed decodes to server, keep drafts local
+- [ ] Wire sidebar to server history, or sync completed decodes after decode
 - [ ] Show `created_at` (requires schema extension or list endpoint)
 
 ---
 
-### 5. Health / demo banner (low priority)
+### 4. Profile autofill in letters (blocked on backend)
 
-**Backend:** `GET /api/health` → `{ status, demo_mode, tls_enabled, profile_encryption }`
+Helpers exist in `profile_autofill.py` but `profile_id` is not accepted on `DecodeRequest`.
 
-**Tasks**
+**Tasks (after backend wiring)**
 
-- [ ] Add `getHealth()` to `api/client.ts`
-- [ ] Subtle banner when `demo_mode` is true
-
----
-
-## 🔶 Partially implemented
-
-### Decode response handling
-
-`client.ts` unwraps `status === "complete"` → `result`. Does not expose:
-
-- `institution_prompt` (needs_institution)
-- `lawyer_referral_eligible` / `lawyer_referral_reason`
-
-### Profile autofill in letters
-
-Helpers exist in `profile_autofill.py` but `profile_id` is not accepted on `DecodeRequest`. Profile is stored but not injected into generated actions.
+- [ ] Pass stored profile id with decode request
+- [ ] Toggle: "Fill my details into generated letters"
+- [ ] Preview which placeholders were replaced vs left blank
 
 ---
 
@@ -137,26 +112,24 @@ Helpers exist in `profile_autofill.py` but `profile_id` is not accepted on `Deco
 
 | Method | Path | Frontend status |
 |--------|------|-----------------|
-| `POST` | `/api/decode` | 🔶 happy path only |
-| `GET` | `/api/documents` | ❌ |
-| `GET` | `/api/documents/{id}` | ❌ |
+| `POST` | `/api/decode` | ✅ |
+| `GET` | `/api/documents` | 🔶 client only |
+| `GET` | `/api/documents/{id}` | 🔶 client only |
 | `POST` | `/api/lawyers/recommend` | ❌ |
-| `GET` | `/api/health` | ❌ |
+| `GET` | `/api/health` | ✅ |
 | `POST` | `/api/profile` | ✅ |
 | `GET` | `/api/profile/{id}` | ✅ |
 | `PUT` | `/api/profile/{id}` | ✅ |
-| `DELETE` | `/api/profile/{id}` | ❌ (no delete UI) |
+| `DELETE` | `/api/profile/{id}` | ✅ |
 
 ---
 
 ## Suggested implementation order
 
-1. **Institution popup** — unblocks decodes for unknown authorities
-2. **Lawyer referral popup + cards** — completes the "can't ground it" path
-3. **Jurisdiction mismatch** — needs small backend schema addition first
-4. **Server history sync** — optional; sessions work for demo
-5. **Health banner** — quick win
-6. **Profile autofill** — after backend accepts `profile_id` on decode
+1. **Lawyer referral popup + cards** — completes the "can't ground it" path
+2. **Jurisdiction mismatch** — needs small backend schema addition first
+3. **Server history sync** — optional; sessions work for demo
+4. **Profile autofill** — after backend accepts `profile_id` on decode
 
 ---
 
@@ -165,8 +138,6 @@ Helpers exist in `profile_autofill.py` but `profile_id` is not accepted on `Deco
 | File | Purpose |
 |------|---------|
 | `src/types.ts` | Keep synced with `schemas.py` |
-| `src/api/client.ts` | Full `DecodeResponse`, lawyers, health, history |
-| `src/components/PasteBox.tsx` | Institution modal trigger |
+| `src/api/client.ts` | `recommendLawyers()`, history wiring |
 | `src/components/ResultView.tsx` | Lawyer referrals, mismatch banner |
-| New: `InstitutionPromptModal.tsx` | Institution picker |
 | New: `LawyerReferralModal.tsx` | Location prompt + results |
