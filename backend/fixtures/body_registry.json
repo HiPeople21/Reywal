@@ -1,0 +1,27 @@
+{
+  "rtb": {
+    "display_name": "Residential Tenancies Board",
+    "jurisdiction": "IE",
+    "domains": ["rtb.ie", "citizensinformation.ie"],
+    "seed_urls": [
+      "https://www.citizensinformation.ie/en/housing/renting-a-home/tenants-and-landlords/ending-a-tenancy/"
+    ],
+    "doc_types": ["tenancy"],
+    "search_queries": [
+      "RTB notice period termination tenancy Ireland",
+      "minimum notice period ending tenancy Ireland"
+    ]
+  },
+  "citizens_information": {
+    "display_name": "Citizens Information",
+    "jurisdiction": "IE",
+    "domains": ["citizensinformation.ie"],
+    "seed_urls": [
+      "https://www.citizensinformation.ie/en/housing/renting-a-home/tenants-and-landlords/ending-a-tenancy/"
+    ],
+    "doc_types": ["tenancy", "gov_letter", "insurance", "medical_bill", "other"],
+    "search_queries": [
+      "Citizens Information housing tenancy rights Ireland"
+    ]
+  }
+}
