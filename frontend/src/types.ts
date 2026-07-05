@@ -94,9 +94,11 @@ export interface DecodeResponse {
 
 // --- Streaming decode progress (POST /api/decode/stream, SSE) ---
 
-// Mirrors the pipeline stages in backend/app/pipeline/run.py, plus the two
-// terminal stages that carry a DecodeResponse.
+// Mirrors the pipeline stages in backend/app/pipeline/run.py — plus 'ingest'
+// (upload jobs only, backend/app/jobs.py) and the two terminal stages that
+// carry a DecodeResponse.
 export type DecodeStage =
+  | 'ingest'
   | 'classify'
   | 'identify'
   | 'extract'

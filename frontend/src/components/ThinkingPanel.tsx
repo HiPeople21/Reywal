@@ -33,6 +33,12 @@ export default function ThinkingPanel({ events, active }: ThinkingPanelProps) {
     byStage.set(e.stage, entry);
   }
 
+  // Upload runs start with an ingest (OCR) stage the paste flow never emits —
+  // only show its row when the run actually has one.
+  const stages = byStage.has('ingest')
+    ? [{ id: 'ingest' as DecodeStage, label: 'Read your file' }, ...STAGES]
+    : STAGES;
+
   return (
     <div className="mt-6 overflow-hidden rounded-2xl border border-indigo-200 bg-indigo-50/60">
       <div className="flex items-center gap-2.5 border-b border-indigo-100 px-5 py-3">
@@ -58,7 +64,7 @@ export default function ThinkingPanel({ events, active }: ThinkingPanelProps) {
       </div>
 
       <ol className="divide-y divide-indigo-100">
-        {STAGES.map(({ id, label }) => {
+        {stages.map(({ id, label }) => {
           const entry = byStage.get(id);
           const state: StageState = entry?.detail
             ? 'done'
