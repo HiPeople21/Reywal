@@ -65,3 +65,50 @@ export interface DecodeRequest {
   text: string;
   jurisdiction?: string; // defaults to "IE"
 }
+
+// --- Profile (autofill) — mirrors UserProfile in schemas.py ---
+
+export interface UserProfile {
+  id: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  address_line1: string;
+  address_line2: string | null;
+  city: string;
+  county: string;
+  eircode: string | null;
+  date_of_birth: string | null; // ISO date YYYY-MM-DD
+  pps_number: string | null;
+  jurisdiction: string;
+  extra: Record<string, string>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserProfileInput {
+  full_name: string;
+  email?: string | null;
+  phone?: string | null;
+  address_line1?: string;
+  address_line2?: string | null;
+  city?: string;
+  county?: string;
+  eircode?: string | null;
+  date_of_birth?: string | null;
+  pps_number?: string | null;
+  jurisdiction?: string;
+  extra?: Record<string, string>;
+}
+
+// --- Client-side only: a "chat" is one pasted document + its decode ---
+
+export interface Session {
+  id: string;
+  title: string;
+  text: string;
+  jurisdiction: string;
+  result: DecodeResult | null;
+  createdAt: string;
+  updatedAt: string;
+}

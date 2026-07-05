@@ -1,4 +1,9 @@
-import type { DecodeRequest, DecodeResult } from '../types';
+import type {
+  DecodeRequest,
+  DecodeResult,
+  UserProfile,
+  UserProfileInput,
+} from '../types';
 import { sampleResult } from '../mocks/sampleResult';
 
 const USE_MOCK = import.meta.env.VITE_MOCK === '1';
@@ -32,4 +37,43 @@ export async function decode(
   }
 
   return (await res.json()) as DecodeResult;
+}
+
+// --- Profile ---
+
+async function readError(res: Response): Promise<string> {
+  const detail = await res.text().catch(() => '');
+  return `${res.status} ${res.statusText}${detail ? ` — ${detail}` : ''}`;
+}
+
+export async function getProfile(id: string): Promise<UserProfile | null> {
+  const res = await fetch(`/api/profile/${id}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`load profile failed: ${await readError(res)}`);
+  return (await res.json()) as UserProfile;
+}
+
+export async function createProfile(
+  input: UserProfileInput
+): Promise<UserProfile> {
+  const res = await fetch('/api/profile', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(`create profile failed: ${await readError(res)}`);
+  return (await res.json()) as UserProfile;
+}
+
+export async function updateProfile(
+  id: string,
+  input: UserProfileInput
+): Promise<UserProfile> {
+  const res = await fetch(`/api/profile/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(`update profile failed: ${await readError(res)}`);
+  return (await res.json()) as UserProfile;
 }

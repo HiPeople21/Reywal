@@ -4,6 +4,10 @@ import type { DecodeResult } from '../types';
 import { decode } from '../api/client';
 
 interface PasteBoxProps {
+  text: string;
+  jurisdiction: string;
+  onTextChange: (text: string) => void;
+  onJurisdictionChange: (jurisdiction: string) => void;
   onResult: (result: DecodeResult) => void;
 }
 
@@ -20,9 +24,13 @@ within 14 days of this notice.
 
 Date of this notice: 21 June 2026`;
 
-export default function PasteBox({ onResult }: PasteBoxProps) {
-  const [text, setText] = useState('');
-  const [jurisdiction, setJurisdiction] = useState('IE');
+export default function PasteBox({
+  text,
+  jurisdiction,
+  onTextChange,
+  onJurisdictionChange,
+  onResult,
+}: PasteBoxProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,7 +73,7 @@ export default function PasteBox({ onResult }: PasteBoxProps) {
       <textarea
         id="doc-text"
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => onTextChange(e.target.value)}
         placeholder="Paste the full text of the tenancy notice, insurance letter, medical bill, or government letter here..."
         rows={12}
         className="w-full resize-y rounded-xl border border-stone-300 bg-stone-50 p-4 text-sm leading-relaxed text-stone-800 shadow-inner focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100"
@@ -76,14 +84,14 @@ export default function PasteBox({ onResult }: PasteBoxProps) {
           <span>Default jurisdiction:</span>
           <select
             value={jurisdiction}
-            onChange={(e) => setJurisdiction(e.target.value)}
+            onChange={(e) => onJurisdictionChange(e.target.value)}
             className="rounded-md border border-stone-300 bg-white px-2 py-1 text-xs font-medium text-stone-700"
           >
             <option value="IE">Ireland (IE)</option>
           </select>
           <button
             type="button"
-            onClick={() => setText(SAMPLE_TEXT)}
+            onClick={() => onTextChange(SAMPLE_TEXT)}
             className="ml-1 rounded-md border border-stone-200 px-2 py-1 font-medium text-indigo-600 hover:bg-indigo-50"
           >
             Try sample notice
