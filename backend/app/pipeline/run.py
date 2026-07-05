@@ -24,7 +24,7 @@ from app.pipeline.jurisdiction import infer_jurisdiction_from_text
 from app.pipeline.refer_lawyers import eligibility_reason, needs_lawyer_referral
 from app.pipeline.retrieve import retrieve
 from app.pipeline.verify import verify
-from app.schemas import DecodeResponse, DecodeResult, UserProvidedInstitution
+from app.schemas import DecodeResponse, DecodeResult, UserProfile, UserProvidedInstitution
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,7 @@ def run_decode_stream(
     text: str,
     jurisdiction: str | None = None,
     institution: UserProvidedInstitution | None = None,
+    profile: UserProfile | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Run the decode pipeline, yielding a progress event per stage.
 
@@ -159,7 +160,7 @@ def run_decode_stream(
 
     yield _running("act", "Drafting what you can do next…")
     try:
-        actions = act(doc_type, facts, verifications, bodies=bodies)
+        actions = act(doc_type, facts, verifications, profile=profile)
     except Exception:
         logger.exception("act failed")
     yield _done("act", f"Prepared {len(actions)} recommended action(s)")
@@ -215,10 +216,11 @@ def run_decode(
     text: str,
     jurisdiction: str | None = None,
     institution: UserProvidedInstitution | None = None,
+    profile: UserProfile | None = None,
 ) -> DecodeResponse:
     """Run the decode pipeline and return the final response (non-streaming)."""
     final: DecodeResponse | None = None
-    for event in run_decode_stream(text, jurisdiction, institution):
+    for event in run_decode_stream(text, jurisdiction, institution, profile):
         response = event.get("response")
         if response is not None:
             final = response

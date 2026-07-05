@@ -159,7 +159,8 @@ export async function decodeStream(
   text: string,
   onEvent: (event: DecodeProgressEvent) => void,
   jurisdiction?: string,
-  institution?: UserProvidedInstitution | null
+  institution?: UserProvidedInstitution | null,
+  profileId?: string | null
 ): Promise<DecodeResponse> {
   if (USE_MOCK) {
     for (const [stage, label, detail] of MOCK_STEPS) {
@@ -181,6 +182,7 @@ export async function decodeStream(
   const payload: DecodeRequest = { text };
   if (jurisdiction) payload.jurisdiction = jurisdiction;
   if (institution) payload.institution = institution;
+  if (profileId) payload.profile_id = profileId;
 
   const res = await fetch(`/api/decode/stream?job_id=${encodeURIComponent(sessionId)}`, {
     method: 'POST',
@@ -213,7 +215,8 @@ export async function uploadDocumentStream(
   file: File,
   onEvent: (event: DecodeProgressEvent) => void,
   jurisdiction?: string,
-  institution?: UserProvidedInstitution | null
+  institution?: UserProvidedInstitution | null,
+  profileId?: string | null
 ): Promise<DecodeResponse> {
   if (USE_MOCK) {
     onEvent({ stage: 'ingest', status: 'running', label: 'Reading your file…' });
@@ -241,6 +244,7 @@ export async function uploadDocumentStream(
   if (institution?.body_id) form.append('institution_body_id', institution.body_id);
   if (institution?.display_name)
     form.append('institution_name', institution.display_name);
+  if (profileId) form.append('profile_id', profileId);
 
   // No Content-Type header — the browser sets the multipart boundary itself.
   const res = await fetch(
