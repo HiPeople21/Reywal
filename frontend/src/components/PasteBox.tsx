@@ -60,7 +60,15 @@ export default function PasteBox({
         setPrompt(null);
         setInstitutionText('');
         onResult(response.result);
+        return;
       }
+      // Reached only if the server returns a shape we don't understand
+      // (e.g. a stale backend on the old contract). Fail loudly rather than
+      // leaving the user staring at a spinner that silently resolved.
+      setError(
+        'The server returned an unexpected response. It may be running an ' +
+          'older version — try restarting the backend and decoding again.'
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
