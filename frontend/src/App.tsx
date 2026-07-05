@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { HealthStatus, UserProfile } from './types';
 import PasteBox from './components/PasteBox';
 import ResultView from './components/ResultView';
@@ -20,9 +20,13 @@ function App() {
     setText,
     setJurisdiction,
     setResult,
+    setDecoding,
   } = useSessions();
 
-  const { getRun, startDecode, loadingIds } = useDecodeRuns(setResult);
+  const { getRun, startDecode, resumeDecode, loadingIds } = useDecodeRuns(
+    setResult,
+    setDecoding
+  );
 
   const { isGhost, toggle: toggleTheme } = useTheme();
   const [profileOpen, setProfileOpen] = useState(false);
@@ -48,6 +52,17 @@ function App() {
       .then(setHealth)
       .catch(() => setHealth(null));
   }, []);
+
+  // Reconnect to any decode that was in flight when the page was refreshed.
+  // The job kept running on the server; we replay its progress and finish it.
+  const resumedRef = useRef(false);
+  useEffect(() => {
+    if (resumedRef.current) return;
+    resumedRef.current = true;
+    for (const s of sessions) {
+      if (s.decoding && !s.result) void resumeDecode(s.id);
+    }
+  }, [sessions, resumeDecode]);
 
   const result = active?.result ?? null;
 
