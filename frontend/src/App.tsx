@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { HealthStatus, UserProfile } from './types';
 import PasteBox from './components/PasteBox';
 import ResultView from './components/ResultView';
@@ -6,6 +6,7 @@ import Sidebar from './components/Sidebar';
 import ProfilePanel, { PROFILE_ID_KEY } from './components/ProfilePanel';
 import { getHealth, getProfile } from './api/client';
 import { useSessions } from './hooks/useSessions';
+import { useDecodeRuns } from './hooks/useDecodeRuns';
 import { useTheme } from './hooks/useTheme';
 
 function App() {
@@ -16,11 +17,18 @@ function App() {
     select,
     create,
     remove,
+    rename,
     setText,
     setJurisdiction,
     setTitle,
     setResult,
+    setDecoding,
   } = useSessions();
+
+  const { getRun, startDecode, uploadDecode, resumeDecode, loadingIds } = useDecodeRuns(
+    setResult,
+    setDecoding
+  );
 
   const { isGhost, toggle: toggleTheme } = useTheme();
   const [profileOpen, setProfileOpen] = useState(false);
@@ -47,6 +55,17 @@ function App() {
       .catch(() => setHealth(null));
   }, []);
 
+  // Reconnect to any decode that was in flight when the page was refreshed.
+  // The job kept running on the server; we replay its progress and finish it.
+  const resumedRef = useRef(false);
+  useEffect(() => {
+    if (resumedRef.current) return;
+    resumedRef.current = true;
+    for (const s of sessions) {
+      if (s.decoding && !s.result) void resumeDecode(s.id);
+    }
+  }, [sessions, resumeDecode]);
+
   const result = active?.result ?? null;
 
   return (
@@ -57,8 +76,10 @@ function App() {
         onSelect={select}
         onCreate={create}
         onDelete={remove}
+        onRename={rename}
         onOpenProfile={() => setProfileOpen(true)}
         profileName={profile?.full_name ?? null}
+        loadingIds={loadingIds}
         isGhost={isGhost}
         onToggleTheme={toggleTheme}
       />
@@ -74,28 +95,50 @@ function App() {
           </div>
         )}
 
-        <header className="sticky top-0 z-10 border-b border-stone-200 bg-surface/90 backdrop-blur">
-          <div className="mx-auto max-w-3xl px-4 py-4 sm:px-6">
-            <h1 className="text-lg font-bold tracking-tight text-stone-900">
-              {active?.title || 'New document'}
-            </h1>
-            <p className="mt-0.5 text-sm text-stone-500">
-              Paste an official letter. We check whether it's even lawful, cite
-              every claim to a source, and draft your response.
-            </p>
-          </div>
-        </header>
-
         <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+          <div className="mb-4 flex items-center gap-1.5 text-sm font-medium text-stone-500">
+            <svg
+              className="h-3.5 w-3.5 shrink-0 text-stone-400"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              aria-hidden
+            >
+              <path
+                d="M5 3h6l4 4v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"
+                strokeLinejoin="round"
+              />
+              <path d="M11 3v4h4" strokeLinejoin="round" />
+            </svg>
+            <span className="truncate">{active?.title || 'New document'}</span>
+          </div>
+
           {active && (
             <PasteBox
               key={active.id}
               text={active.text}
               jurisdiction={active.jurisdiction}
+              run={getRun(active.id)}
               onTextChange={(t) => setText(active.id, t)}
               onJurisdictionChange={(j) => setJurisdiction(active.id, j)}
-              onResult={(r) => setResult(active.id, r)}
-              onUploaded={(name) => setTitle(active.id, name)}
+              onDecode={(institution) =>
+                startDecode(
+                  active.id,
+                  active.text,
+                  active.jurisdiction || undefined,
+                  institution
+                )
+              }
+              onUpload={(file, institution) => {
+                setTitle(active.id, file.name);
+                void uploadDecode(
+                  active.id,
+                  file,
+                  active.jurisdiction || undefined,
+                  institution
+                );
+              }}
             />
           )}
 
@@ -108,7 +151,7 @@ function App() {
           <footer className="mt-10 border-t border-stone-200 pt-4 pb-2">
             <p className="text-xs leading-relaxed text-stone-400">
               {result?.disclaimer ??
-                'Information, not legal advice. Standing cites the sources it uses so you can verify them yourself.'}
+                'Information, not legal advice. reywal cites the sources it uses so you can verify them yourself.'}
             </p>
           </footer>
         </main>
