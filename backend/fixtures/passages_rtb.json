@@ -1,7 +1,7 @@
 [
   {
     "passage_id": "rtb-notice-90-days",
-    "body_id": "rtb",
+    "body_id": "IE:rtb",
     "url": "https://www.citizensinformation.ie/en/housing/renting-a-home/tenants-and-landlords/ending-a-tenancy/",
     "title": "Ending a tenancy - Citizens Information",
     "section_heading": "Notice periods",
@@ -11,7 +11,7 @@
   },
   {
     "passage_id": "rtb-notice-invalid",
-    "body_id": "rtb",
+    "body_id": "IE:rtb",
     "url": "https://www.citizensinformation.ie/en/housing/renting-a-home/tenants-and-landlords/ending-a-tenancy/",
     "title": "Ending a tenancy - Citizens Information",
     "section_heading": "Invalid notices",

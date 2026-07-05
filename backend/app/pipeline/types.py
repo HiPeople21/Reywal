@@ -9,6 +9,7 @@ class IdentifiedBody(BaseModel):
     body_id: str
     display_name: str
     confidence: float
+    jurisdiction: Optional[str] = None  # ISO code; defaults to pipeline jurisdiction
     source_span: Optional[str] = None
     match_kind: Literal[
         "letterhead", "signature", "reference", "explicit", "inferred"

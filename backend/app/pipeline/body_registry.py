@@ -1,4 +1,8 @@
-"""Curated institutional body registry — maps body_id to scrape/search targets."""
+"""Curated institutional body registry — seed data only.
+
+Runtime reads/writes go through institution_store.py (SQLite).
+This module remains for bootstrap via institution_seed.py.
+"""
 
 import json
 import os

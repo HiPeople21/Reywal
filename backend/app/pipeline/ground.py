@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 from app.clients.config import fixtures_dir, is_demo_mode
 from app.clients.firecrawl import scrape
-from app.pipeline.body_registry import resolve_body_id_for_url
+from app.pipeline.institution_store import report_link_failure, resolve_body_id_for_url
 from app.pipeline.types import IdentifiedBody, Passage
 
 _HEADING_RE = re.compile(r"^(#{1,3})\s+(.+)$", re.MULTILINE)
@@ -19,6 +19,7 @@ _OVERLAP_CHARS = 200
 def ground(
     urls: list[str],
     bodies: list[IdentifiedBody] | None = None,
+    jurisdiction: str = "IE",
 ) -> list[Passage]:
     """Scrape each URL and return chunked passages."""
     if is_demo_mode() and not urls:
@@ -35,7 +36,7 @@ def ground(
     for url in urls:
         try:
             page = scrape(url)
-            body_id = _resolve_body_id(url, bodies)
+            body_id = _resolve_body_id(url, bodies, jurisdiction)
             chunks = chunk_markdown(
                 markdown=page.get("markdown", ""),
                 url=page.get("url", url),
@@ -45,6 +46,23 @@ def ground(
             )
             passages.extend(chunks)
         except Exception:
+            replacement_urls = report_link_failure(url)
+            for replacement_url in replacement_urls:
+                if replacement_url == url:
+                    continue
+                try:
+                    page = scrape(replacement_url)
+                    body_id = _resolve_body_id(replacement_url, bodies, jurisdiction)
+                    chunks = chunk_markdown(
+                        markdown=page.get("markdown", ""),
+                        url=page.get("url", replacement_url),
+                        title=page.get("title", replacement_url),
+                        retrieved_at=retrieved_at,
+                        body_id=body_id,
+                    )
+                    passages.extend(chunks)
+                except Exception:
+                    continue
             continue
 
     if not passages and is_demo_mode():
@@ -127,12 +145,20 @@ def _window_text(text: str) -> list[str]:
     return [w for w in windows if w]
 
 
-def _resolve_body_id(url: str, bodies: list[IdentifiedBody] | None) -> str | None:
-    from_registry = resolve_body_id_for_url(url)
+def _resolve_body_id(
+    url: str,
+    bodies: list[IdentifiedBody] | None,
+    jurisdiction: str,
+) -> str | None:
+    from_registry = resolve_body_id_for_url(url, jurisdiction)
     if from_registry:
         return from_registry
     if bodies:
-        return bodies[0].body_id
+        from app.pipeline.jurisdiction import compose_institution_id
+
+        body = bodies[0]
+        place = body.jurisdiction or jurisdiction
+        return compose_institution_id(body.body_id, place)
     return None
 
 

@@ -51,7 +51,7 @@ def run_decode(text: str, jurisdiction: str = "IE") -> DecodeResult:
 
     passages = []
     try:
-        passages = ground(urls, bodies=bodies)
+        passages = ground(urls, bodies=bodies, jurisdiction=resolved_jurisdiction)
     except Exception:
         logger.exception("ground failed")
 
