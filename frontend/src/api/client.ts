@@ -203,6 +203,66 @@ export async function decodeStream(
 }
 
 /**
+ * Upload a PDF/image and stream the decode progress. Streaming sibling of
+ * `uploadDocument`, mirroring `decodeStream`: `sessionId` is used as the server
+ * job id so the run can be reconnected to after a page refresh. Resolves with
+ * the final DecodeResponse.
+ */
+export async function uploadDocumentStream(
+  sessionId: string,
+  file: File,
+  onEvent: (event: DecodeProgressEvent) => void,
+  jurisdiction?: string,
+  institution?: UserProvidedInstitution | null
+): Promise<DecodeResponse> {
+  if (USE_MOCK) {
+    onEvent({ stage: 'ingest', status: 'running', label: 'Reading your file…' });
+    await delay(null, 450);
+    onEvent({ stage: 'ingest', status: 'done', detail: 'Converted your file to text' });
+    for (const [stage, label, detail] of MOCK_STEPS) {
+      onEvent({ stage, status: 'running', label });
+      await delay(null, 450);
+      onEvent({ stage, status: 'done', detail });
+    }
+    const response: DecodeResponse = {
+      status: 'complete',
+      institution_prompt: null,
+      result: { ...sampleResult, jurisdiction: jurisdiction || sampleResult.jurisdiction },
+      lawyer_referral_eligible: false,
+      lawyer_referral_reason: '',
+    };
+    onEvent({ stage: 'complete', status: 'done', response });
+    return response;
+  }
+
+  const form = new FormData();
+  form.append('file', file);
+  form.append('jurisdiction', jurisdiction || 'IE');
+  if (institution?.body_id) form.append('institution_body_id', institution.body_id);
+  if (institution?.display_name)
+    form.append('institution_name', institution.display_name);
+
+  // No Content-Type header — the browser sets the multipart boundary itself.
+  const res = await fetch(
+    `/api/decode/upload/stream?job_id=${encodeURIComponent(sessionId)}`,
+    { method: 'POST', body: form }
+  );
+
+  if (!res.ok || !res.body) {
+    throw new Error(`upload failed: ${await readError(res)}`);
+  }
+
+  const final = await readSse(res, onEvent);
+  if (!final) {
+    throw new Error(
+      'The server closed the stream without a final result. It may be running ' +
+        'an older version — try restarting the backend and decoding again.'
+    );
+  }
+  return final;
+}
+
+/**
  * Reconnect to a decode job started earlier (e.g. before a page refresh),
  * replaying its progress and streaming until it finishes. Returns the final
  * DecodeResponse, or null if the job is gone (server never had it, restarted,
